@@ -1,0 +1,91 @@
+apply plugin: 'java'
+apply plugin: 'spring-boot'
+
+buildscript {
+    repositories {
+        mavenCentral()
+        mavenLocal()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.3.5.RELEASE")
+    }
+}
+
+sourceCompatibility = '1.8'
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+
+if (!hasProperty('mainClass')) {
+    ext.mainClass = 'com.naveed.spring.ws.Application'
+}
+
+configurations {
+    provided
+    jaxb
+}
+
+sourceSets {
+    main { compileClasspath += configurations.provided }
+}
+
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+    maven { url "https://repository.jboss.org/nexus/content/repositories/releases" }
+}
+
+task genJaxb {
+    ext.sourcesDir = "${buildDir}/generated-sources/jaxb"
+    ext.classesDir = "${buildDir}/classes/jaxb"
+    ext.schema = "src/main/resources/countries.xsd"
+
+    outputs.dir classesDir
+
+    doLast() {
+        project.ant {
+            taskdef name: "xjc", classname: "com.sun.tools.xjc.XJCTask",
+            classpath: configurations.jaxb.asPath
+            mkdir(dir: sourcesDir)
+            mkdir(dir: classesDir)
+
+            xjc(destdir: sourcesDir, schema: schema) {
+                arg(value: "-wsdl")
+                produces(dir: sourcesDir, includes: "**/*.java")
+            }
+
+            javac(destdir: classesDir, source: 1.6, target: 1.6, debug: true,
+                debugLevel: "lines,vars,source",
+                classpath: configurations.jaxb.asPath) {
+                src(path: sourcesDir)
+                include(name: "**/*.java")
+                include(name: "*.java")
+            }
+
+            copy(todir: classesDir) {
+                fileset(dir: sourcesDir, erroronmissingdir: false) {
+                    exclude(name: "**/*.java")
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    compile("org.springframework.boot:spring-boot-starter-web:1.3.5.RELEASE")
+    compile("com.h2database:h2:1.4.191")
+    //Slf4j and Logback
+    compile "org.slf4j:slf4j-api:1.7.10",
+        "ch.qos.logback:logback-classic:1.1.7",
+        "ch.qos.logback:logback-core:1.1.7"
+    
+    compile("org.springframework.boot:spring-boot-starter-ws:1.3.5.RELEASE")
+    testCompile("org.springframework.boot:spring-boot-starter-test:1.3.5.RELEASE")
+    compile("wsdl4j:wsdl4j:1.6.1")
+    jaxb("com.sun.xml.bind:jaxb-xjc:2.2.4-1")
+    provided "org.projectlombok:lombok:1.16.2"
+    compile(files(genJaxb.classesDir).builtBy(genJaxb))
+    testCompile group: 'junit', name: 'junit', version: '4.10'
+}
+
+
